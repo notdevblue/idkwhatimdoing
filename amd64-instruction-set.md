@@ -105,4 +105,72 @@ mov PHONE[rsi], rax     ; GAS 에선 rsi[rsi] 은 NAME(%rsi)
 * 로컬 변수들을 가지고 있을 수 있음.
 서브루튼이 재귀적으로 불렸을 때, 각각의 재귀 호출은 인수와 로컬 변수들을 위해 스택을 준비해 둬야 함.
 
-(The RBP register is used for... 설명 부터 해야 함)[https://github.com/mschwartz/assembly-tutorial/blob/main/README.md#indirect-with-displacement]
+RBP(Base Pointer) 레지스터는 "C" 언어의 스택 규칙 중 함수를 호출할 때 사용되는 스택 프레임에 대해 사용됨.
+* Call Stack -> 함수 호출 흐름 전채를 담는 메모리 영역
+* Stack frame -> 특정 함수 하나의 실행 컨텍스트 (지역변수, 반환 주소 등...)
+
+함수 호출 시, 인자들을(오른쪽부터 왼쪽 순서로) Stack 에 Push 함.
+`foo(a, b, c)` 의 경우, 컴파일러는 c -> b -> a -> 순서로 stack 에 push 함. (cdecl 기준)
+* `printf(fmt, ...)` 와 같은 가변 인자 때문에, 오른쪽부터 왼쪽으로 push 하게 됨. fmt 가 항상 top 에 오기 때문에, 스택 top 근처에 옴. 고로 첫 인자를 고정 위치에서 찾을 수 있음
+```bash
+printf("%d %d %d %d", 1, 2, 3, 4, 5);
+
+stack 은 Last In First Out 구조고, 최상단 메모리부터 아래로 내려가는 방식이니:
+10 "%d %d %d %d" # <- top
+09 1
+08 2
+07 3
+06 4
+05 5
+04 ...
+03 ...
+02 ...
+01 ...
+```
+
+함수를 호출할 시, **RBP**값은 다음과 같은 의미를 가질 수 있음 (주소가 8바이트라고 기준.. RBP니까)
+```
+|-----------------|
+| arguments       | <- rbp + 양수 (16 부터...)  # x86-64 기준, 레지스터 6개에 인자 전달되기 때문에 stack에는 7번째 인자부터 존재함.
+|-----------------|
+| return address  | <- rbp + 8                  # 실행 종료 후 돌아갈 주소
+|-----------------| 
+| old RBP         | <- rbp 0                    # caller 함수의 RBP 값
+|-----------------|
+| local variables | <- rbp - 양수
+|-----------------|
+```
+
+```assembly
+// source
+void func() { }
+
+; 는:
+func:
+    pushl %ebp      ; prologue: caller 의 EBP stack에 저장 
+    movl %esp, %ebp ; prologue: 새 frame base 설정
+    leave           ; epilogue: EBP 복원, ESP 복원
+    ret             ; return
+
+// source
+void cup(int water_amount) {
+    int dust, total;
+    dust = 5;
+    total = water_amount + dust;
+}
+
+cup:
+    pushl   %ebp
+    movl    %esp,       %ebp        ; frame base 설정
+    subl    $8,         %esp        ; 로컬 변수 두개 (dust, total) 공간 확보
+
+    movl    $5,         -4(%ebp)    ; dust = 5
+    movl    -4(%ebp),   %eax        ; eax = dust
+    addl    8(%ebp),    %eax        ; eax += water_amount
+    movl    %eax,       -8(%ebp)    ; total = eax
+
+    leave
+    ret
+```
+
+[함수가 함수 호출하는 케이스의 경우 확인해야 함.](https://github.com/mschwartz/assembly-tutorial/blob/main/README.md#indirect-with-displacement)
