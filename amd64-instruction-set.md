@@ -173,4 +173,54 @@ cup:
     ret
 ```
 
-[함수가 함수 호출하는 케이스의 경우 확인해야 함.](https://github.com/mschwartz/assembly-tutorial/blob/main/README.md#indirect-with-displacement)
+함수가 함수 부르는 경우는, 다음과 같은 stack 구조가 됨.
+```C
+void coffee(int x) {
+    int local = 154;
+    vodka(x);
+}
+
+void vodka(int x) {
+    int another_local = 40;
+}
+
+HIGH (0xffff)
+|--------------------|
+| # coffee frame     |
+| int x              | rbo + 16
+| return address     | rbp + 8
+| old RBP            | rbp 0
+| int local          | rbp - 4
+|--------------------| 
+| # vodka frame      |
+| int x              | rbo + 16
+| return address     | rbp + 8
+| old RBP            | rbp 0
+| int another_local  | rbp - 4
+|--------------------|
+LOW (0x0000)
+```
+
+### Indirect with displacement and scaled index
+
+요 주소 지정 방식은 배열 요쇼를 접근하는데 사용됨.
+* byte 배열의 요소는 1 byte
+* word 배열의 요소는 2 bytes
+* dword 배열의 요소는 4 bytes
+* qword 배열으 요소는 8 bytes
+
+```assembly
+    member(rsi, rbx, 4) ; member 가 0 일 수 있음.
+```
+* member -> 구조체 멤버 오프셋 (Indirect with Displacement)
+* rsi -> base (구조체/배열 시작 주소)
+* rbx -> 인덱스
+* 4 -> 크기
+
+이건 이런 느낌
+```c++
+int rbx = 0;
+rsi->member[rbx * 4];
+```
+
+C 의 `arr[i]` 가 `*(arr + i * sizeof(T))` 가 되는 의미. `*(member + rbx * 4)`
